@@ -58,8 +58,9 @@ def make_handler(engine):
                 # Validate before writing
                 import tempfile, os as _os
                 try:
+                    cfg_dir = _os.path.dirname(_os.path.abspath(engine._config_path))
                     with tempfile.NamedTemporaryFile(
-                        mode="w", suffix=".toml", delete=False
+                        mode="w", suffix=".toml", delete=False, dir=cfg_dir
                     ) as tf:
                         tf.write(text)
                         tmp = tf.name
