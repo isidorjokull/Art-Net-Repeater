@@ -48,6 +48,11 @@ def make_handler(engine):
                     return
                 self._respond(200, "text/plain", b"ok")
 
+            elif self.path == "/levels":
+                engine.levels_enabled = not engine.levels_enabled
+                self._respond(200, "application/json",
+                              json.dumps({"enabled": engine.levels_enabled}).encode())
+
             elif self.path == "/config":
                 text = body.decode("utf-8", errors="replace")
                 # Validate before writing
@@ -84,14 +89,14 @@ def make_handler(engine):
             self.end_headers()
             try:
                 while True:
-                    payload = {
-                        **engine.status,
-                        "levels": engine.levels,
-                    }
+                    payload = dict(engine.status)
+                    if engine.levels_enabled:
+                        payload["levels"] = engine.levels
                     data = json.dumps(payload)
                     self.wfile.write(f"data: {data}\n\n".encode())
                     self.wfile.flush()
-                    time.sleep(0.2)
+                    # 200 ms when DMX viewer is on (smooth bars); 1 s otherwise
+                    time.sleep(0.2 if engine.levels_enabled else 1.0)
             except (BrokenPipeError, ConnectionResetError, OSError):
                 pass
 

@@ -6,15 +6,15 @@ artnet_port = 6454
 [[rules]]
 name         = "Universe 0 → Universe 1 (ch 1-107)"
 src_universe = 0
-src_channels = [1, 107]
+src_channels = [1, 100]
 dst_universe = 1
-dst_channels = [1, 107]
-merge        = "ltp"
+dst_channels = [6, 105]
+merge        = "htp"
 
 [[rules]]
 name         = "Universe 0 → Universe 0 (ch 1-107 mirrored at 300)"
 src_universe = 0
 src_channels = [1, 107]
 dst_universe = 0
-dst_channels = [300, 406]
-merge        = "ltp"
+dst_channels = [312, 418]
+merge        = "htp"

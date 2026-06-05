@@ -25,6 +25,9 @@ class Engine:
         self._rx = 0
         self._tx = 0
 
+        # DMX viewer gating — levels payload is expensive; only include when UI requests it
+        self.levels_enabled: bool = False
+
         # Per-rule Hz tracking
         self._rule_counts: list[int] = [0] * len(self._cfg.rules)
         self._rule_hz: list[float] = [0.0] * len(self._cfg.rules)
