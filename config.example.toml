@@ -1,0 +1,43 @@
+# Art-Net Repeater — Example Configuration
+# Copy to config.toml and edit as needed.
+
+[network]
+listen_ip   = "0.0.0.0"      # interface to listen on (0.0.0.0 = all interfaces)
+target_ip   = "broadcast"     # "broadcast" or a specific IP e.g. "192.168.1.50"
+artnet_port = 6454            # standard Art-Net UDP port — change only if needed
+
+# Each [[rules]] block defines one channel remapping.
+# src_channels and dst_channels are [first, last] inclusive ranges (1-indexed DMX standard).
+# The ranges must be the same length.
+# Multiple rules can share the same src_universe (fan-out) or dst_universe (merge).
+
+[[rules]]
+name         = "Front wash copy"
+src_universe = 0              # receive from universe 0
+src_channels = [1, 6]        # channels 1–6 (e.g. an RGB fixture × 2)
+dst_universe = 1              # send to universe 1
+dst_channels = [10, 15]      # write into channels 10–15
+merge        = "ltp"          # "ltp" = latest value wins (default); "htp" = highest value wins
+
+[[rules]]
+name         = "Backlight mirror"
+src_universe = 2
+src_channels = [50, 60]
+dst_universe = 5
+dst_channels = [1, 11]
+merge        = "ltp"
+
+# Example: fan the same source to two different destinations
+# [[rules]]
+# name         = "Haze fan-out A"
+# src_universe = 0
+# src_channels = [100, 101]
+# dst_universe = 3
+# dst_channels = [1, 2]
+#
+# [[rules]]
+# name         = "Haze fan-out B"
+# src_universe = 0
+# src_channels = [100, 101]
+# dst_universe = 4
+# dst_channels = [1, 2]

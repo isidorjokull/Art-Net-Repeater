@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Art-Net Repeater</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e2e4ed;
+    --muted: #6b7280;
+    --accent: #6366f1;
+    --green: #22c55e;
+    --yellow: #eab308;
+    --red: #ef4444;
+    --bar-bg: #2a2d3a;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 20px;
+  }
+
+  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 12px; }
+
+  /* ── Header ── */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .title { font-size: 16px; font-weight: 700; color: var(--text); }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+  }
+  .pill.running { background: #14532d; color: var(--green); }
+  .pill.paused  { background: #713f12; color: var(--yellow); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .counters { color: var(--muted); font-size: 12px; }
+  .counters span { color: var(--text); }
+  .spacer { flex: 1; }
+  .btn {
+    padding: 6px 16px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    transition: background .15s;
+  }
+  .btn:hover { background: var(--border); }
+  .btn.danger { border-color: #7f1d1d; color: var(--red); }
+  .btn.danger:hover { background: #7f1d1d33; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+  }
+
+  /* ── Rules table ── */
+  .rules-table { width: 100%; border-collapse: collapse; }
+  .rules-table th {
+    text-align: left;
+    color: var(--muted);
+    font-weight: 400;
+    font-size: 11px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .rules-table td { padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .rules-table tr:last-child td { border-bottom: none; }
+  .tag {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .tag.ltp { background: #1e3a5f; color: #60a5fa; }
+  .tag.htp { background: #3b1f5e; color: #c084fc; }
+  .hz-badge {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 4px;
+    font-size: 11px;
+    background: var(--bar-bg);
+    color: var(--muted);
+  }
+  .hz-badge.active { color: var(--green); }
+  .arrow { color: var(--muted); padding: 0 6px; }
+
+  /* ── Universe tabs ── */
+  .tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+  .tab {
+    padding: 4px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+  }
+  .tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* ── Channel bars ── */
+  .channel-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 6px;
+  }
+  .ch-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .ch-label { color: var(--muted); width: 44px; text-align: right; flex-shrink: 0; }
+  .ch-bar-wrap { flex: 1; background: var(--bar-bg); border-radius: 3px; height: 10px; overflow: hidden; }
+  .ch-bar { height: 100%; border-radius: 3px; background: var(--accent); transition: width .1s; }
+  .ch-val { width: 28px; text-align: right; color: var(--text); flex-shrink: 0; }
+
+  /* ── Config editor ── */
+  .config-toggle {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .config-toggle:hover { color: var(--text); }
+  #config-panel { display: none; }
+  #config-panel.open { display: block; }
+  textarea {
+    width: 100%;
+    height: 260px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 12px;
+    resize: vertical;
+    outline: none;
+  }
+  textarea:focus { border-color: var(--accent); }
+  .config-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  #config-msg { font-size: 12px; }
+  #config-msg.ok  { color: var(--green); }
+  #config-msg.err { color: var(--red); }
+
+  /* ── Network info ── */
+  .net-info { color: var(--muted); font-size: 12px; }
+  .net-info span { color: var(--text); }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="title">Art-Net Repeater</div>
+  <div id="status-pill" class="pill running"><div class="dot"></div><span id="status-text">RUNNING</span></div>
+  <div class="counters">rx <span id="rx">0</span> &nbsp; tx <span id="tx">0</span></div>
+  <div class="net-info">
+    <span id="net-listen">—</span> → <span id="net-target">—</span>
+  </div>
+  <div class="spacer"></div>
+  <button class="btn" id="toggle-btn" onclick="togglePause()">Pause</button>
+</div>
+
+<!-- Rules -->
+<div class="card">
+  <h2>Rules</h2>
+  <table class="rules-table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Source</th>
+        <th></th>
+        <th>Destination</th>
+        <th>Merge</th>
+        <th>Rate</th>
+      </tr>
+    </thead>
+    <tbody id="rules-body"></tbody>
+  </table>
+</div>
+
+<!-- Channel levels -->
+<div class="card">
+  <h2>Channel Levels</h2>
+  <div class="tabs" id="uni-tabs"></div>
+  <div class="channel-grid" id="channel-grid"></div>
+</div>
+
+<!-- Config editor -->
+<div class="card">
+  <button class="config-toggle" onclick="toggleConfig()">
+    <span id="config-arrow">▶</span> Config Editor
+  </button>
+  <div id="config-panel">
+    <textarea id="config-text" spellcheck="false"></textarea>
+    <div class="config-actions">
+      <button class="btn" onclick="saveConfig()">Save &amp; Reload</button>
+      <span id="config-msg"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+  let paused = false;
+  let activeUni = null;
+  let ruleChannels = {};   // {universe: Set of 0-indexed channel positions}
+  let lastData = null;
+
+  // ── SSE ──────────────────────────────────────────────────────────────
+  const es = new EventSource('/events');
+  es.onmessage = e => {
+    lastData = JSON.parse(e.data);
+    update(lastData);
+  };
+
+  function update(d) {
+    // Status
+    paused = d.paused;
+    const pill = document.getElementById('status-pill');
+    const txt  = document.getElementById('status-text');
+    if (d.paused) {
+      pill.className = 'pill paused'; txt.textContent = 'PAUSED';
+      document.getElementById('toggle-btn').textContent = 'Resume';
+    } else {
+      pill.className = 'pill running'; txt.textContent = 'RUNNING';
+      document.getElementById('toggle-btn').textContent = 'Pause';
+    }
+    document.getElementById('rx').textContent = d.rx.toLocaleString();
+    document.getElementById('tx').textContent = d.tx.toLocaleString();
+    document.getElementById('net-listen').textContent = d.listen || '—';
+    document.getElementById('net-target').textContent = d.target || '—';
+
+    // Rules
+    updateRules(d.rules);
+
+    // Build set of channels to display per universe
+    ruleChannels = {};
+    for (const r of d.rules) {
+      const addChs = (uni, first, last) => {
+        if (!ruleChannels[uni]) ruleChannels[uni] = new Set();
+        for (let i = first - 1; i < last; i++) ruleChannels[uni].add(i);
+      };
+      addChs(r.src_u, r.src_ch[0], r.src_ch[1]);
+      addChs(r.dst_u, r.dst_ch[0], r.dst_ch[1]);
+    }
+
+    // Universe tabs
+    updateTabs(Object.keys(ruleChannels).map(Number).sort((a,b)=>a-b));
+
+    // Channel bars
+    if (activeUni !== null && d.levels[String(activeUni)]) {
+      updateBars(d.levels[String(activeUni)], ruleChannels[activeUni] || new Set());
+    }
+  }
+
+  // ── Rules table ──────────────────────────────────────────────────────
+  function updateRules(rules) {
+    const tbody = document.getElementById('rules-body');
+    while (tbody.rows.length > rules.length) tbody.deleteRow(-1);
+    while (tbody.rows.length < rules.length) tbody.insertRow();
+    rules.forEach((r, i) => {
+      const row = tbody.rows[i];
+      const hzActive = r.hz > 0;
+      row.innerHTML = `
+        <td>${r.name}</td>
+        <td>U${r.src_u} ch${r.src_ch[0]}–${r.src_ch[1]}</td>
+        <td class="arrow">→</td>
+        <td>U${r.dst_u} ch${r.dst_ch[0]}–${r.dst_ch[1]}</td>
+        <td><span class="tag ${r.merge}">${r.merge.toUpperCase()}</span></td>
+        <td><span class="hz-badge ${hzActive ? 'active' : ''}">${r.hz > 0 ? r.hz.toFixed(0)+' Hz' : '—'}</span></td>
+      `;
+    });
+  }
+
+  // ── Universe tabs ─────────────────────────────────────────────────────
+  function updateTabs(unis) {
+    const container = document.getElementById('uni-tabs');
+    if (activeUni === null && unis.length > 0) activeUni = unis[0];
+
+    // Only rebuild if the set changed
+    const existing = [...container.querySelectorAll('.tab')].map(b => Number(b.dataset.uni));
+    if (JSON.stringify(existing) === JSON.stringify(unis)) {
+      // Just update active class
+      container.querySelectorAll('.tab').forEach(b => {
+        b.className = 'tab' + (Number(b.dataset.uni) === activeUni ? ' active' : '');
+      });
+      return;
+    }
+    container.innerHTML = '';
+    unis.forEach(u => {
+      const b = document.createElement('button');
+      b.className = 'tab' + (u === activeUni ? ' active' : '');
+      b.textContent = `Universe ${u}`;
+      b.dataset.uni = u;
+      b.onclick = () => { activeUni = u; updateTabs(unis); };
+      container.appendChild(b);
+    });
+  }
+
+  // ── Channel bars ──────────────────────────────────────────────────────
+  function updateBars(levels, channels) {
+    const grid = document.getElementById('channel-grid');
+    const chArr = [...channels].sort((a,b)=>a-b);
+
+    while (grid.children.length > chArr.length) grid.removeChild(grid.lastChild);
+    while (grid.children.length < chArr.length) {
+      const row = document.createElement('div');
+      row.className = 'ch-row';
+      row.innerHTML = `
+        <div class="ch-label"></div>
+        <div class="ch-bar-wrap"><div class="ch-bar"></div></div>
+        <div class="ch-val"></div>`;
+      grid.appendChild(row);
+    }
+    chArr.forEach((ci, i) => {
+      const val = levels[ci] || 0;
+      const pct = (val / 255 * 100).toFixed(1);
+      const row = grid.children[i];
+      row.querySelector('.ch-label').textContent = `ch${ci+1}`;
+      row.querySelector('.ch-bar').style.width = pct + '%';
+      row.querySelector('.ch-val').textContent = val;
+    });
+  }
+
+  // ── Controls ─────────────────────────────────────────────────────────
+  function togglePause() {
+    const action = paused ? 'resume' : 'pause';
+    fetch('/control', { method: 'POST', body: JSON.stringify({ action }), headers: { 'Content-Type': 'application/json' } });
+  }
+
+  // ── Config editor ─────────────────────────────────────────────────────
+  function toggleConfig() {
+    const panel = document.getElementById('config-panel');
+    const arrow = document.getElementById('config-arrow');
+    const open = panel.classList.toggle('open');
+    arrow.textContent = open ? '▼' : '▶';
+    if (open) loadConfig();
+  }
+
+  function loadConfig() {
+    fetch('/config').then(r => r.text()).then(t => {
+      document.getElementById('config-text').value = t;
+    });
+  }
+
+  function saveConfig() {
+    const text = document.getElementById('config-text').value;
+    const msg = document.getElementById('config-msg');
+    msg.textContent = 'Saving…'; msg.className = '';
+    fetch('/config', { method: 'POST', body: text, headers: { 'Content-Type': 'text/plain' } })
+      .then(async r => {
+        const body = await r.text();
+        if (r.ok) { msg.textContent = 'Saved.'; msg.className = 'ok'; }
+        else       { msg.textContent = 'Error: ' + body; msg.className = 'err'; }
+      })
+      .catch(e => { msg.textContent = 'Network error'; msg.className = 'err'; });
+  }
+</script>
+</body>
+</html>
