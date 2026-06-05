@@ -21,6 +21,7 @@ class Config:
     target_ip: str          # resolved IP or DEFAULT_BROADCAST_IP
     is_broadcast: bool
     port: int
+    max_hz: float | None    # output framerate cap per universe; None = unlimited
     rules: list[Rule] = field(default_factory=list)
 
 
@@ -83,6 +84,17 @@ def load(path: str, cli_overrides: dict) -> "Config":
     is_broadcast = target_raw.lower() == BROADCAST_SENTINEL
     target_ip = DEFAULT_BROADCAST_IP if is_broadcast else target_raw
 
+    max_hz_raw = net.get("max_hz", None)
+    if max_hz_raw is not None:
+        try:
+            max_hz = float(max_hz_raw)
+        except (TypeError, ValueError):
+            raise ValueError("network.max_hz must be a number")
+        if max_hz <= 0:
+            raise ValueError("network.max_hz must be a positive number")
+    else:
+        max_hz = None
+
     raw_rules = raw.get("rules", [])
     if not raw_rules:
         raise ValueError("Config has no [[rules]] — nothing to do.")
@@ -96,5 +108,6 @@ def load(path: str, cli_overrides: dict) -> "Config":
         target_ip=target_ip,
         is_broadcast=is_broadcast,
         port=port,
+        max_hz=max_hz,
         rules=rules,
     )

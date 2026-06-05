@@ -55,6 +55,7 @@
   .counters span { color: var(--text); }
   .net-info { color: var(--muted); font-size: 11px; }
   .net-info span { color: var(--text); }
+  .hz-limit-ctrl { display: flex; align-items: center; color: var(--muted); font-size: 12px; }
   .spacer { flex: 1; }
 
   /* ── Buttons ── */
@@ -183,6 +184,13 @@
   <div id="status-pill" class="pill running"><div class="dot"></div><span id="status-text">RUNNING</span></div>
   <div class="counters">rx <span id="rx">0</span> &nbsp; tx <span id="tx">0</span></div>
   <div class="net-info"><span id="net-listen">—</span> → <span id="net-target">—</span></div>
+  <div class="hz-limit-ctrl">
+    Limit&nbsp;<input type="number" id="max-hz-input" placeholder="∞" min="1" max="512"
+      style="width:52px" title="Max output framerate (Hz). Leave blank for unlimited."
+      onkeydown="if(event.key==='Enter') saveMaxHz()">
+    &nbsp;Hz&nbsp;<button class="btn small" onclick="saveMaxHz()">Set</button>
+    <span id="max-hz-msg" style="font-size:11px; margin-left:6px;"></span>
+  </div>
   <div class="spacer"></div>
   <button class="btn" id="toggle-btn" onclick="togglePause()">Pause</button>
 </div>
@@ -217,7 +225,8 @@
 let paused        = false;
 let dmxEnabled    = false;
 let dirty         = false;      // user has unsaved rule edits
-let networkStatus = {};         // {listen, target} from last SSE
+let networkStatus = {};         // {listen, target, max_hz} from last SSE
+let latestRules   = [];         // last SSE rules snapshot — used by saveMaxHz
 let ruleChannels  = {};         // {universe: Set of 0-indexed channel positions}
 let activeUni     = null;
 let hzData        = [];         // latest hz values per rule index from SSE
@@ -235,7 +244,13 @@ es.onmessage = e => {
 // ── Status ────────────────────────────────────────────────────────
 function applyStatus(d) {
   paused = d.paused;
-  networkStatus = { listen: d.listen, target: d.target };
+  networkStatus = { listen: d.listen, target: d.target, max_hz: d.max_hz };
+
+  // Sync the limit input only when the user isn't actively editing it
+  const inp = document.getElementById('max-hz-input');
+  if (inp && document.activeElement !== inp) {
+    inp.value = d.max_hz != null ? d.max_hz : '';
+  }
 
   const pill = document.getElementById('status-pill');
   document.getElementById('status-text').textContent = d.paused ? 'PAUSED' : 'RUNNING';
@@ -249,6 +264,7 @@ function applyStatus(d) {
 
 // ── Rules form ────────────────────────────────────────────────────
 function applyRules(rules) {
+  latestRules = rules;
   hzData = rules.map(r => r.hz);
   const list = document.getElementById('rules-list');
 
@@ -372,12 +388,13 @@ function getRulesFromForm() {
   }));
 }
 
-function buildToml(rules) {
+function buildToml(rules, maxHz) {
   const [listenIp, port] = (networkStatus.listen || '0.0.0.0:6454').split(':');
   let t = `[network]\n`;
   t += `listen_ip   = "${listenIp}"\n`;
   t += `target_ip   = "${networkStatus.target || 'broadcast'}"\n`;
   t += `artnet_port = ${port || 6454}\n`;
+  if (maxHz != null && maxHz > 0) t += `max_hz      = ${maxHz}\n`;
   for (const r of rules) {
     t += `\n[[rules]]\n`;
     t += `name         = "${r.name.replace(/\\/g,'\\\\').replace(/"/g,'\\"')}"\n`;
@@ -390,9 +407,14 @@ function buildToml(rules) {
   return t;
 }
 
+function currentMaxHz() {
+  const v = parseFloat(document.getElementById('max-hz-input')?.value);
+  return isNaN(v) || v <= 0 ? null : v;
+}
+
 function saveRules() {
   const rules = getRulesFromForm();
-  const toml  = buildToml(rules);
+  const toml  = buildToml(rules, currentMaxHz());
   const msg   = document.getElementById('rules-msg');
   msg.textContent = 'Saving…'; msg.className = ''; msg.style.color = 'var(--muted)';
 
@@ -407,6 +429,24 @@ function saveRules() {
       }
     })
     .catch(() => { msg.textContent = 'Network error'; msg.className = 'err'; msg.style.color = ''; });
+}
+
+function saveMaxHz() {
+  const maxHz = currentMaxHz();
+  // Build TOML using the latest SSE rule snapshot (avoids requiring the rules form to be open)
+  const rules = latestRules.map(r => r);
+  const toml  = buildToml(rules, maxHz);
+  const msg   = document.getElementById('max-hz-msg');
+  msg.textContent = 'Saving…'; msg.style.color = 'var(--muted)';
+
+  fetch('/config', { method: 'POST', body: toml, headers: { 'Content-Type': 'text/plain' } })
+    .then(async r => {
+      const body = await r.text();
+      msg.textContent = r.ok ? (maxHz ? `Set to ${maxHz} Hz` : 'Unlimited') : 'Error: ' + body;
+      msg.style.color = r.ok ? 'var(--green)' : 'var(--red)';
+      setTimeout(() => { msg.textContent = ''; }, 3000);
+    })
+    .catch(() => { msg.textContent = 'Network error'; msg.style.color = 'var(--red)'; });
 }
 
 // ── Pause / Resume ────────────────────────────────────────────────

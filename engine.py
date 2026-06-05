@@ -34,6 +34,9 @@ class Engine:
         self._hz_last_time = time.monotonic()
         self._hz_thread: threading.Thread | None = None
 
+        # Per-universe last-send timestamp for output rate limiting (UDP thread only)
+        self._last_sent: dict[int, float] = {}
+
         self._sock_rx: socket.socket | None = None
         self._sock_tx: socket.socket | None = None
 
@@ -110,6 +113,7 @@ class Engine:
                 "tx": self._tx,
                 "listen": f"{cfg.listen_ip}:{cfg.port}",
                 "target": cfg.target_ip,
+                "max_hz": cfg.max_hz,
                 "rules": rules_info,
             }
 
@@ -187,7 +191,13 @@ class Engine:
                 continue
 
             dest = (cfg.target_ip, cfg.port)
+            max_hz = cfg.max_hz
+            now = time.monotonic()
             for dst_universe, dmx_buf in outputs.items():
+                if max_hz is not None:
+                    if now - self._last_sent.get(dst_universe, 0.0) < 1.0 / max_hz:
+                        continue
+                    self._last_sent[dst_universe] = now
                 try:
                     tx.sendto(build_artdmx(dst_universe, bytes(dmx_buf)), dest)
                 except OSError:
