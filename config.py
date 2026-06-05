@@ -51,6 +51,12 @@ def _parse_rule(raw: dict, index: int) -> Rule:
     if merge not in ("ltp", "htp"):
         raise ValueError(f"{name}: merge must be 'ltp' or 'htp', got '{merge}'")
 
+    target_ip = raw.get("target_ip", None)
+    if target_ip is not None:
+        target_ip = str(target_ip).strip()
+        if not target_ip:
+            target_ip = None
+
     return Rule(
         name=name,
         src_universe=src_universe,
@@ -60,6 +66,7 @@ def _parse_rule(raw: dict, index: int) -> Rule:
         dst_first=dst_first_1 - 1,
         dst_last=dst_last_1 - 1,
         merge=merge,
+        target_ip=target_ip,
     )
 
 

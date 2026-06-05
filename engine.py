@@ -104,6 +104,7 @@ class Engine:
                     "dst_u": r.dst_universe,
                     "dst_ch": [r.dst_first + 1, r.dst_last + 1],
                     "merge": r.merge,
+                    "target_ip": r.target_ip,
                     "hz": round(self._rule_hz[i] if i < len(self._rule_hz) else 0, 1),
                 })
             return {
@@ -190,20 +191,28 @@ class Engine:
             if paused:
                 continue
 
-            dest = (cfg.target_ip, cfg.port)
+            # Build per-universe target IP sets from rule overrides + global fallback
+            uni_targets: dict[int, set[str]] = {}
+            for rule in cfg.rules:
+                t = rule.target_ip or cfg.target_ip
+                uni_targets.setdefault(rule.dst_universe, set()).add(t)
+
             max_hz = cfg.max_hz
             now = time.monotonic()
             for dst_universe, dmx_buf in outputs.items():
-                if max_hz is not None:
-                    if now - self._last_sent.get(dst_universe, 0.0) < 1.0 / max_hz:
-                        continue
-                    self._last_sent[dst_universe] = now
-                try:
-                    tx.sendto(build_artdmx(dst_universe, bytes(dmx_buf)), dest)
-                except OSError:
-                    pass
-                with self._lock:
-                    self._tx += 1
+                pkt = build_artdmx(dst_universe, bytes(dmx_buf))
+                for target_ip in uni_targets.get(dst_universe, {cfg.target_ip}):
+                    if max_hz is not None:
+                        key = (dst_universe, target_ip)
+                        if now - self._last_sent.get(key, 0.0) < 1.0 / max_hz:
+                            continue
+                        self._last_sent[key] = now
+                    try:
+                        tx.sendto(pkt, (target_ip, cfg.port))
+                    except OSError:
+                        pass
+                    with self._lock:
+                        self._tx += 1
 
     def _hz_ticker(self) -> None:
         while not self._stop_event.is_set():

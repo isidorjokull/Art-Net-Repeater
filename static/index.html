@@ -319,6 +319,9 @@ function makeRuleCard(r, i) {
                oninput="syncDstEnd(${i})" title="First destination channel">
       –<input type="number" id="rdc2-${i}" value="${r.dst_ch[1]}" min="1" max="512"
                class="derived" readonly title="Auto: dst start + source length − 1">
+      &nbsp;<input type="text" id="rtgt-${i}" value="${esc(r.target_ip || '')}"
+             placeholder="global target" style="width:130px; color: ${r.target_ip ? 'var(--text)' : 'var(--muted)'}"
+             oninput="markDirty()" title="Unicast target IP for this rule (leave blank to use global)">
     </div>`;
   return card;
 }
@@ -384,7 +387,8 @@ function getRulesFromForm() {
     dst_u:  parseInt(document.getElementById(`rdu-${i}`)?.value  || 0),
     dst_ch: [parseInt(document.getElementById(`rdc1-${i}`)?.value || 1),
              parseInt(document.getElementById(`rdc2-${i}`)?.value || 1)],
-    merge:  document.getElementById(`merge-${i}`)?.classList.contains('htp') ? 'htp' : 'ltp',
+    merge:     document.getElementById(`merge-${i}`)?.classList.contains('htp') ? 'htp' : 'ltp',
+    target_ip: document.getElementById(`rtgt-${i}`)?.value.trim() || null,
   }));
 }
 
@@ -403,6 +407,7 @@ function buildToml(rules, maxHz) {
     t += `dst_universe = ${r.dst_u}\n`;
     t += `dst_channels = [${r.dst_ch[0]}, ${r.dst_ch[1]}]\n`;
     t += `merge        = "${r.merge}"\n`;
+    if (r.target_ip) t += `target_ip    = "${r.target_ip}"\n`;
   }
   return t;
 }

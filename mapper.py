@@ -12,6 +12,7 @@ class Rule:
     dst_first: int   # 0-indexed
     dst_last: int    # inclusive, 0-indexed
     merge: str       # "ltp" or "htp"
+    target_ip: str | None = None  # unicast override; None = use global target_ip
 
     @property
     def length(self) -> int:
